@@ -27,14 +27,6 @@ pub enum Condition<T> {
     Not(Box<Condition<T>>),
 }
 
-#[cfg(debug_assertions)]
-// Helper function for tests
-impl<T> From<T> for Condition<T> {
-    fn from(value: T) -> Self {
-        Self::Just(value)
-    }
-}
-
 impl<R, T> ResolvableCondition<R, T> for Condition<T>
 where
     R: ConditionResolver<T> + Send + Sync,
@@ -67,6 +59,7 @@ where
 }
 
 impl<T> Condition<T> {
+    /// Get an iterator over all individual conditions, without boolean context
     pub fn flat_conditions(&self) -> impl Iterator<Item = &T> {
         match self {
             // base case
@@ -82,6 +75,36 @@ impl<T> Condition<T> {
             Condition::Not(condition) => condition.flat_conditions().collect(),
         }
         .into_iter()
+    }
+
+    // Helper function for tests
+    #[cfg(debug_assertions)]
+    pub fn all(conditions: impl IntoIterator<Item = Condition<T>>) -> Self {
+        Condition::All(
+            conditions
+                .into_iter()
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+        )
+    }
+
+    // Helper function for tests
+    #[cfg(debug_assertions)]
+    pub fn any(conditions: impl IntoIterator<Item = Condition<T>>) -> Self {
+        Condition::Any(
+            conditions
+                .into_iter()
+                .collect::<Vec<_>>()
+                .into_boxed_slice(),
+        )
+    }
+}
+
+// Helper function for tests
+#[cfg(debug_assertions)]
+impl<T> From<T> for Condition<T> {
+    fn from(value: T) -> Self {
+        Self::Just(value)
     }
 }
 
