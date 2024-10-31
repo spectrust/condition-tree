@@ -108,36 +108,6 @@ impl<T> From<T> for Condition<T> {
     }
 }
 
-/// Intermediate struct representing the JSON structure of conditions, which allows
-/// any of:
-///
-/// - a single session condition, e.g. {"session": "is_new"} or {"event": "has_workflow"}
-/// - an array of conditions, which implies "all" combinatorial logic, e.g.:
-///   [{"session": "is_new"}, {"event": "has_workflow"}]
-/// - an explicit boolean combination, e.g.:
-///   {"any": [{"session": "is_new"}, {"event": "has_workflow"}]}
-#[derive(Debug, Deserialize, Clone)]
-#[serde(rename_all = "snake_case", untagged)]
-pub enum ConditionIntermediate<T> {
-    Just(T),
-    ImplicitAll(Box<[Condition<T>]>),
-    Any { any: Box<[Condition<T>]> },
-    All { all: Box<[Condition<T>]> },
-    Not { not: Box<Condition<T>> },
-}
-
-impl<T> From<ConditionIntermediate<T>> for Condition<T> {
-    fn from(value: ConditionIntermediate<T>) -> Self {
-        match value {
-            ConditionIntermediate::Just(condition) => Self::Just(condition),
-            ConditionIntermediate::ImplicitAll(all) => Self::All(all),
-            ConditionIntermediate::Any { any } => Self::Any(any),
-            ConditionIntermediate::All { all } => Self::All(all),
-            ConditionIntermediate::Not { not } => Self::Not(not),
-        }
-    }
-}
-
 /// Resolve a single base condition
 pub trait ConditionResolver<T> {
     type Error;
@@ -162,6 +132,44 @@ where
     ) -> BoxFuture<'a, Result<bool, <R as ConditionResolver<T>>::Error>>;
 }
 
+/// Intermediate struct representing the JSON structure of conditions, which allows
+/// any of:
+///
+/// - a single session condition, e.g. {"session": "is_new"} or {"event": "has_workflow"}
+/// - an array of conditions, which implies "all" combinatorial logic, e.g.:
+///   [{"session": "is_new"}, {"event": "has_workflow"}]
+/// - an explicit boolean combination, e.g.:
+///   {"any": [{"session": "is_new"}, {"event": "has_workflow"}]}
+#[derive(Debug, Deserialize, Clone)]
+#[serde(rename_all = "snake_case", untagged)]
+pub enum ConditionIntermediate<T> {
+    Just(T),
+    ImplicitAll(Box<[Condition<T>]>),
+    Any { any: Box<[Condition<T>]> },
+    All { all: Box<[Condition<T>]> },
+    Not { not: Box<Condition<T>> },
+}
+
+impl<T> From<ConditionIntermediate<T>> for Condition<T> {
+    fn from(value: ConditionIntermediate<T>) -> Self {
+        match value {
+            ConditionIntermediate::Just(condition) => Self::Just(condition),
+            // All or Any with a single item can deserialize to the item
+            ConditionIntermediate::ImplicitAll(array)
+            | ConditionIntermediate::All { all: array }
+            | ConditionIntermediate::Any { any: array }
+                if array.len() == 1 =>
+            {
+                array.into_vec().pop().expect("array has one item")
+            }
+            ConditionIntermediate::ImplicitAll(all) => Self::All(all),
+            ConditionIntermediate::Any { any } => Self::Any(any),
+            ConditionIntermediate::All { all } => Self::All(all),
+            ConditionIntermediate::Not { not } => Self::Not(not),
+        }
+    }
+}
+
 #[cfg(test)]
 mod test_conditions_deser {
     use super::*;
@@ -178,7 +186,79 @@ mod test_conditions_deser {
         let cases = [
             (
                 json!({"all": ["A"], "comment": "foo"}),
-                Condition::All(Box::new([Condition::Just(Cond::A)])),
+                Condition::Just(Cond::A),
+            ),
+            (
+                json!({"all": [{"all": ["A"]}], "comment": "foo"}),
+                Condition::Just(Cond::A),
+            ),
+            (
+                json!({"all": [{"any": ["A"]}], "comment": "foo"}),
+                Condition::Just(Cond::A),
+            ),
+            (
+                json!({"all": [{"any": [{"any": ["A"]}]}], "comment": "foo"}),
+                Condition::Just(Cond::A),
+            ),
+            (json!(["A"]), Condition::Just(Cond::A)),
+            (
+                json!({"all": ["A", "B"], "comment": "foo"}),
+                Condition::All(Box::new([
+                    Condition::Just(Cond::A),
+                    Condition::Just(Cond::B),
+                ])),
+            ),
+            (
+                json!({"all": [{"any": [{"any": ["A", "B"]}]}], "comment": "foo"}),
+                Condition::Any(Box::new([
+                    Condition::Just(Cond::A),
+                    Condition::Just(Cond::B),
+                ])),
+            ),
+            (
+                json!({"all": [{"any": [{"any": ["A"]}, "A"]}], "comment": "foo"}),
+                Condition::Any(Box::new([
+                    Condition::Just(Cond::A),
+                    Condition::Just(Cond::A),
+                ])),
+            ),
+            (
+                json!(["A", "B"]),
+                Condition::All(Box::new([
+                    Condition::Just(Cond::A),
+                    Condition::Just(Cond::B),
+                ])),
+            ),
+            (
+                json!({"all": ["A", "B"], "comment": "foo"}),
+                Condition::All(Box::new([
+                    Condition::Just(Cond::A),
+                    Condition::Just(Cond::B),
+                ])),
+            ),
+            (
+                json!({"any": ["A"], "comment": "foo"}),
+                Condition::Just(Cond::A),
+            ),
+            (
+                json!({"any": ["A", "B"], "comment": "foo"}),
+                Condition::Any(Box::new([
+                    Condition::Just(Cond::A),
+                    Condition::Just(Cond::B),
+                ])),
+            ),
+            (
+                json!({"all": [], "comment": "foo"}),
+                Condition::All(Box::new([])),
+            ),
+            (
+                json!({"all": [{"all": []}], "comment": "foo"}),
+                Condition::All(Box::new([])),
+            ),
+            (json!([{"all": [[]]}]), Condition::All(Box::new([]))),
+            (
+                json!([{"all": [{"all": []}]}]),
+                Condition::All(Box::new([])),
             ),
             (
                 json!({"any": [], "comment": "foo"}),
@@ -191,6 +271,21 @@ mod test_conditions_deser {
             (
                 json!({"not": "A", "comment": "foo"}),
                 Condition::Not(Box::new(Condition::Just(Cond::A))),
+            ),
+            (
+                json!({"not": {"all": ["A"]}, "comment": "foo"}),
+                Condition::Not(Box::new(Condition::Just(Cond::A))),
+            ),
+            (
+                json!({"not": {"any": ["A"]}, "comment": "foo"}),
+                Condition::Not(Box::new(Condition::Just(Cond::A))),
+            ),
+            (
+                json!({"not": {"any": ["A", "B"]}, "comment": "foo"}),
+                Condition::Not(Box::new(Condition::Any(Box::new([
+                    Condition::Just(Cond::A),
+                    Condition::Just(Cond::B),
+                ])))),
             ),
         ];
 
