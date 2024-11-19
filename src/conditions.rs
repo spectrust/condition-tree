@@ -9,17 +9,16 @@ use futures::{
     future::{self, BoxFuture},
     FutureExt, StreamExt, TryStreamExt,
 };
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// Base case for recursive condition specification.
 ///
 /// Either a single condition (`Just(condition)`) or a combinatoric operator
 /// applied to some condition (in the case of `not`) or some combination of
 /// conditions (in the case of `any` and `all`).
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 #[cfg_attr(debug_assertions, derive(PartialEq, Eq))]
 #[serde(rename_all = "snake_case", from = "ConditionIntermediate<T>")]
-#[allow(dead_code)] // temporary
 pub enum Condition<T> {
     Just(T),
     Any(Box<[Condition<T>]>),
