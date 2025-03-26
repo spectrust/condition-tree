@@ -27,6 +27,9 @@
 #![cfg_attr(debug_assertions, warn(clippy::dbg_macro))]
 #![cfg_attr(debug_assertions, warn(clippy::print_stdout))]
 #![cfg_attr(debug_assertions, warn(clippy::print_stderr))]
+#![cfg_attr(test, allow(clippy::dbg_macro))]
+#![cfg_attr(test, allow(clippy::print_stdout))]
+#![cfg_attr(test, allow(clippy::print_stderr))]
 // Deny todo!() in release builds
 #![cfg_attr(not(debug_assertions), deny(clippy::todo))]
 // But allow (with a warning so you remember it's there) in debug builds
