@@ -6,8 +6,8 @@
 use std::future::Future;
 
 use futures::{
-    future::{self, BoxFuture},
     FutureExt, StreamExt, TryStreamExt,
+    future::{self, BoxFuture},
 };
 use serde::{Deserialize, Serialize};
 
