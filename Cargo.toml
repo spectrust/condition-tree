@@ -5,7 +5,7 @@ edition = "2024"
 license = "BSD-3-Clause"
 authors = ["Matthew Planchard <msplanchard@gmail.com>", "Jay Cunningham", "Rachel Kelmenson"]
 description = "Generic splitting of async streams"
-homepage = "https://github.com/spectrust/tee-stream"
+homepage = "https://github.com/spectrust/condition-tree"
 
 [dependencies]
 futures = "0.3.32"
