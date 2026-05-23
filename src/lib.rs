@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: BSD-3-Clause
+
 //! Arbitrarily combinable boolean conditions in JSON
 //!
 //! You can use this to enable parsing arbitrary boolean combinations for
